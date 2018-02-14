@@ -1,0 +1,117 @@
+---
+title: "Adult Egg Ambig Analyses"
+author: "Rosa Li"
+date: '`r Sys.Date()`'
+output: pdf_document
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+rm(list = ls())
+require(ggplot2)
+require(grid)
+require(dplyr)
+# require(xlsx)
+
+ambig <- read.csv("./AdultAmbigRaw.csv")
+ambigStart <- which(colnames(ambig) == "RA6_0")
+ambigEnd <- which(colnames(ambig) == "RA0_6")
+ambig$PChoseRisk <- rowMeans(ambig[,ambigStart:ambigEnd])
+
+```
+
+## Plot individual adults' data
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+require(reshape2)
+ambigStairs <- ambig[,c(ambigEnd:ambigStart)]
+ambigStairs <- ambigStairs[with(ambigStairs, order(RA0_6, RA1_5, RA2_4, RA3_3, RA4_2, RA5_1, RA6_0)),]
+colnames(ambigStairs) <- c("0/6", "1/6", "2/6", "3/6", "4/6", "5/6", "6/6")
+
+ambigStairs <- ambigStairs == 1
+row.names(ambigStairs) <- 32:1
+test.m <- melt(ambigStairs)
+p <- ggplot(test.m, aes(Var2, Var1)) + geom_tile(aes(fill = value), colour = "grey") + 
+  scale_fill_manual(values = c("grey90", "black"), labels=c("Chose ambiguous", "Chose risky")) + 
+  theme_classic() + 
+  theme(legend.title=element_blank()) + theme(legend.text=element_text(size=12)) + 
+  theme(legend.position = c(0.06,0.94)) + theme(legend.justification = c(0,1)) +
+  ggtitle("All adults, all trials") + theme(plot.title=element_text(face="bold", size=16)) + 
+  labs(x="P(Risk)", y="Participant Number") + theme(axis.title=element_text(size=12)) + 
+  theme(axis.text=element_text(size=10)) +
+  scale_y_continuous(breaks=c(1,5,10,15,20,25,30))
+
+print(p)
+
+```
+\newpage
+
+## Plot overall logistic regression for adults
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# require(reshape2)
+ambig4logit <- ambig[,ambigStart:ambigEnd]
+colnames(ambig4logit) <- c("6/6", "5/6", "4/6", "3/6", "2/6", "1/6", "0/6")
+ambig4logit <- melt(ambig4logit)
+colnames(ambig4logit) <- c("PRisk", "ChoseRisk")
+
+adultAmbig4logit <- ambig4logit
+adultAmbig4logit$group <- "Adult"
+
+
+adultAmbigAtt <- data.frame(colMeans(ambig[,ambigStart:ambigEnd]))
+colnames(adultAmbigAtt) <- "PropChoseRisk"
+adultAmbigAtt$PRisk <- c("6/6", "5/6", "4/6", "3/6", "2/6", "1/6", "0/6")
+adultAmbigAtt <- data.frame(adultAmbigAtt)
+adultAmbigAtt$group <- "adult"
+
+p <- ggplot(adultAmbigAtt, aes(x=PRisk, y=PropChoseRisk)) + geom_point() + theme_classic() +
+  stat_smooth(data = ambig4logit, aes(group = 1, y = ChoseRisk), method="glm", method.args = list(family="binomial")) + 
+  theme(plot.title = element_text(face="bold", size = 16)) + ggtitle("Adults: Proportion chose risky by P(Risk)") + 
+  theme(axis.title=element_text(size=12)) + theme(axis.text=element_text(size=10))
+print(p) 
+
+```
+
+## Plot individual data and logit on same plot
+```{r, echo = F, warning = F, message = F}
+require(gtable)
+
+test.m2 <- test.m
+
+p1 <- ggplot(test.m2, aes(Var2, Var1)) + geom_tile(aes(fill = value), colour = "grey") + 
+  scale_fill_manual(values = c("grey90", "grey70"), labels=c("Chose ambiguous", "Chose risky")) + 
+  theme_classic() + 
+  theme(legend.title=element_blank()) + theme(legend.text=element_text(size=20)) + 
+  theme(legend.position = c(0.06,0.94)) + theme(legend.justification = c(0,1)) +
+  labs(x="Risky P(Win)", y="Adult participant number") + theme(axis.title=element_text(size=28)) + 
+  theme(axis.text=element_text(size=24)) +
+  scale_y_continuous(breaks=c(1,5,10,15,20,25,30))+ theme(plot.margin = unit(c(1,2,1,2), "lines"))
+
+p2 <- ggplot(adultAmbigAtt, aes(x=PRisk, y=PropChoseRisk)) + geom_point() + 
+  stat_smooth(data = ambig4logit, aes(group = 1, y = ChoseRisk), method="glm", method.args = list(family="binomial")) + 
+  theme_classic() %+replace% theme(panel.background = element_rect(fill = NA)) + 
+  theme(axis.title.y=element_text(angle = 270)) +
+  theme(axis.title=element_text(size=28)) + theme(axis.text=element_text(size=24)) + 
+  labs(y = "Proportion chose risky") 
+
+#extract gtable
+g1 <- ggplot_gtable(ggplot_build(p1))
+g2 <- ggplot_gtable(ggplot_build(p2))
+
+#overlap plots
+pp <- c(subset(g1$layout, name == "panel", se = t:r))
+g <- gtable_add_grob(g1, g2$grobs[[which(g2$layout$name == "panel")]], pp$t, pp$l, pp$b, pp$l)
+
+# axis tweaks
+ia <- which(g2$layout$name == "axis-l")
+ga <- g2$grobs[[ia]]
+ax <- ga$children[[2]]
+ax$widths <- rev(ax$widths)
+ax$grobs <- rev(ax$grobs)
+ax$grobs[[1]]$x <- ax$grobs[[1]]$x - unit(1, "npc") + unit(0.15, "cm")
+g <- gtable_add_cols(g, g2$widths[g2$layout[ia, ]$l], length(g$widths) - 1)
+g <- gtable_add_grob(g, ax, pp$t, length(g$widths) - 1, pp$b)
+
+#g <- gtable_add_grob(g, g2$grobs[[7]], pp$t, length(g$widths), pp$b)
+# draw it
+grid.draw(g)
+
+```
