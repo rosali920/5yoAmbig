@@ -4,6 +4,7 @@
 * Choice data for kids & adults
     * P1-P3 practice trials
     * RAX_Y is X winning Y losing for the risky sock; 1 means chose risk (over ambiguous)
+    * F is 1 for Female, 0 for Male
 * Code to plot data
 
 ## Stimuli
